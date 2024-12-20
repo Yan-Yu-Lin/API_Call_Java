@@ -27,46 +27,47 @@ public class MainActivity extends AppCompatActivity {
             // Build request
             Request request = new Request.Builder().url(URL).build();
 
-            // Create UnsafeOkHttpClient instance instead of regular OkHttpClient
+            // Create OkHttpClient instance
             OkHttpClient okHttpClient = UnsafeOkHttpClient.getUnsafeOkHttpClient();
 
             // Execute the request
             okHttpClient.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                    if (response.isSuccessful()) {
-                        String responseData = response.body().string();
+                    if (response.code() == 200) {
+                        if (response.body() == null) return;
 
                         // Parse JSON using GSON
-                        Gson gson = new Gson();
-                        Data data = gson.fromJson(responseData, Data.class);
+                        Data data = new Gson().fromJson(response.body().string(), Data.class);
 
-                        // Get first result from the array
-                        String station = data.result.results[0].Station;
-                        String destination = data.result.results[0].Destination;
+                        // Create String array to store response data
+                        final String[] items = new String[data.result.results.length];
+
+                        // Fill the array with formatted strings
+                        for (int i = 0; i < items.length; i++) {
+                            items[i] = "\n列車即將進入: " + data.result.results[i].Station +
+                                    "\n列車行駛目的地: " + data.result.results[i].Destination;
+                        }
 
                         // Show dialog on UI thread
                         runOnUiThread(() -> {
                             new AlertDialog.Builder(MainActivity.this)
                                     .setTitle("台北捷運列車到站站名")
-                                    .setMessage("列車目前位置：" + station + "\n列車行駛目的地：" + destination)
-                                    .setPositiveButton("確定", null)
+                                    .setItems(items, null)
                                     .show();
                         });
+                    } else if (!response.isSuccessful()) {
+                        Log.e("伺服器錯誤", response.code() + " " + response.message());
+                    } else {
+                        Log.e("其他錯誤", response.code() + " " + response.message());
                     }
                 }
 
                 @Override
                 public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                    // Handle failure
-                    Log.e("API_CALL", "API call failed", e);
-                    runOnUiThread(() -> {
-                        new AlertDialog.Builder(MainActivity.this)
-                                .setTitle("錯誤")
-                                .setMessage("連線失敗")
-                                .setPositiveButton("確定", null)
-                                .show();
-                    });
+                    if (e.getMessage() != null) {
+                        Log.e("查詢失敗", e.getMessage());
+                    }
                 }
             });
         });
